@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: #FFFFFF;
+  --color-fg: #111111;
+  --color-accent: #C9A227;
+  --color-accent-soft: #E8D9A8;
+  --color-cta-bg: #111111;
+  --color-cta-fg: #FFFFFF;
+  --color-cta-secondary-bg: #FFFFFF;
+  --color-cta-secondary-border: #111111;
+  --color-footer-bg: #0D0F12;
+  --color-footer-fg: #FFFFFF;
+  --color-footer-muted: #9CA3AF;
+  --color-border: #E5E5E5;
+  --color-muted-text: #6B7280;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Ribbon for Sold / Rented Cards */
+.ribbon-wrapper {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 110px;
+  height: 110px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.ribbon-sold {
+  position: absolute;
+  top: 22px;
+  right: -32px;
+  width: 130px;
+  padding: 4px 0;
+  background-color: #B91C1C; /* Desaturated red as specified in §2.1 */
+  color: #FFFFFF;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+  transform: rotate(45deg);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+.ribbon-rented {
+  position: absolute;
+  top: 22px;
+  right: -32px;
+  width: 130px;
+  padding: 4px 0;
+  background-color: #111111; /* Near-black as specified in §2.1 */
+  color: #FFFFFF;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+  transform: rotate(45deg);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
