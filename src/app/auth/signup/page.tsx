@@ -28,7 +28,11 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      await signup(email, name);
+      const { error: signUpError } = await signup(email, password, name);
+      if (signUpError) {
+        setError(signUpError.message);
+        return;
+      }
       router.push("/auth/verify?email=" + encodeURIComponent(email));
     } catch (err: unknown) {
       if (err instanceof Error) {

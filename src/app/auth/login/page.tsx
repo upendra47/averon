@@ -5,49 +5,49 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Wordmark } from "@/components/common/Wordmark";
 import { useAuth } from "@/context/auth-context";
-import { RoleType } from "@/types";
 import { Lock, Mail, ArrowRight } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
+  const supabase = createClient();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<RoleType>("user");
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMsg("");
     try {
-      await login(email, role);
+      const { error } = await login(email, password);
+      if (error) {
+        setErrorMsg(error.message);
+        return;
+      }
+      
+      if (!supabase) {
+        setErrorMsg("Supabase environment variables are missing.");
+        return;
+      }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .is("revoked_at", null)
+        .single();
+        
+      const role = data?.role || "user";
+
       if (role === "developer") {
         router.push("/admin/manage-admins");
       } else if (role === "admin") {
-        router.push("/admin");
-      } else {
-        router.push("/dashboard");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleQuickDemo = async (demoRole: RoleType) => {
-    setLoading(true);
-    try {
-      const demoEmail =
-        demoRole === "developer"
-          ? "dev@averonrealty.com"
-          : demoRole === "admin"
-          ? "propertys.bengaluru@gmail.com"
-          : "client@example.com";
-
-      await login(demoEmail, demoRole);
-      if (demoRole === "developer") {
-        router.push("/admin/manage-admins");
-      } else if (demoRole === "admin") {
         router.push("/admin");
       } else {
         router.push("/dashboard");
@@ -71,40 +71,12 @@ export default function LoginPage() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 shadow-sm border border-brand-border rounded-lg sm:px-10 space-y-6">
-          {/* Quick Demo Access Pills */}
-          <div className="bg-neutral-50 p-3 rounded border border-brand-border">
-            <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider block mb-2">
-              Instant 1-Click Role Login (Demo & Evaluation):
-            </span>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickDemo("developer")}
-                className="py-1.5 px-2 bg-black text-brand-accent text-[11px] font-bold uppercase rounded border border-neutral-700 hover:border-brand-accent transition-colors"
-                title="Full unconditional access + Manage Admins"
-              >
-                Developer
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemo("admin")}
-                className="py-1.5 px-2 bg-neutral-800 text-white text-[11px] font-semibold uppercase rounded hover:bg-neutral-700 transition-colors"
-                title="Property CRUD + Inquiries"
-              >
-                Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemo("user")}
-                className="py-1.5 px-2 bg-white text-brand-fg text-[11px] font-semibold uppercase rounded border border-brand-border hover:border-black transition-colors"
-                title="Browse + Saved Favorites"
-              >
-                User
-              </button>
-            </div>
-          </div>
-
           <form onSubmit={handleSubmit} className="space-y-4">
+            {errorMsg && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded text-xs">
+                {errorMsg}
+              </div>
+            )}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-brand-fg mb-1">
                 Email Address
@@ -147,25 +119,10 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-brand-fg mb-1">
-                Account Role
-              </label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as RoleType)}
-                className="w-full px-3 py-2 text-xs bg-neutral-50 border border-brand-border rounded focus:bg-white focus:border-brand-accent focus:outline-none capitalize"
-              >
-                <option value="user">User / Client</option>
-                <option value="admin">Admin (Broker Management)</option>
-                <option value="developer">Developer (Full Access)</option>
-              </select>
-            </div>
-
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 px-4 bg-brand-cta text-brand-ctaFg hover:bg-black transition-colors rounded text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-2"
+              className="w-full py-2.5 px-4 bg-brand-cta text-brand-ctaFg hover:bg-black transition-colors rounded text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-70"
             >
               <span>{loading ? "Authenticating..." : "Sign In"}</span>
               <ArrowRight className="w-3.5 h-3.5" />

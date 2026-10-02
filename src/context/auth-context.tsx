@@ -16,116 +16,115 @@ interface AuthContextType {
   role: RoleType;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, role?: RoleType) => Promise<void>;
-  signup: (email: string, name: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signup: (email: string, password: string, name: string) => Promise<{ error: Error | null }>;
   logout: () => Promise<void>;
-  switchRole: (newRole: RoleType) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Default to developer in demo mode for full accessibility to all features
-  const [user, setUser] = useState<AuthUser | null>({
-    id: "dev-001",
-    email: "dev@averonrealty.com",
-    name: "Averon Developer",
-    role: "developer",
-  });
-  const [isLoading, setIsLoading] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const supabase = createClient();
 
   useEffect(() => {
-    // Check if user stored in localStorage
-    const saved = localStorage.getItem("averon_auth_user");
-    if (saved) {
-      try {
-        setUser(JSON.parse(saved));
-      } catch (e) {
-        console.error(e);
+    async function getSession() {
+      if (!supabase) {
+        setIsLoading(false);
+        return;
       }
+      
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      if (authUser) {
+        const { data } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", authUser.id)
+          .is("revoked_at", null)
+          .single();
+          
+        setUser({
+          id: authUser.id,
+          email: authUser.email || "",
+          name: authUser.user_metadata?.full_name || authUser.email?.split("@")[0],
+          role: (data?.role as RoleType) || "user",
+        });
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
     }
+    
+    getSession();
 
-    const supabase = createClient();
-    if (supabase) {
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        if (user) {
-          // fetch role from user_roles
-          supabase
+    if (!supabase) return;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          const { data } = await supabase
             .from("user_roles")
             .select("role")
-            .eq("user_id", user.id)
+            .eq("user_id", session.user.id)
             .is("revoked_at", null)
-            .single()
-            .then(({ data }) => {
-              const currentRole = (data?.role as RoleType) || "user";
-              setUser({
-                id: user.id,
-                email: user.email || "",
-                name: user.user_metadata?.full_name || user.email?.split("@")[0],
-                role: currentRole,
-              });
-            });
+            .single();
+            
+          setUser({
+            id: session.user.id,
+            email: session.user.email || "",
+            name: session.user.user_metadata?.full_name || session.user.email?.split("@")[0],
+            role: (data?.role as RoleType) || "user",
+          });
+        } else {
+          setUser(null);
         }
-      });
-    }
-  }, []);
+      }
+    );
 
-  const login = async (email: string, chosenRole: RoleType = "user") => {
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  const login = async (email: string, password: string) => {
     setIsLoading(true);
-    try {
-      const newUser: AuthUser = {
-        id: `user-${Date.now()}`,
-        email,
-        name: email.split("@")[0],
-        role: chosenRole,
-      };
-      setUser(newUser);
-      localStorage.setItem("averon_auth_user", JSON.stringify(newUser));
-    } finally {
+    if (!supabase) {
       setIsLoading(false);
+      return { error: new Error("Supabase client is not initialized") };
     }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setIsLoading(false);
+    return { error };
   };
 
-  const signup = async (email: string, name: string) => {
+  const signup = async (email: string, password: string, name: string) => {
     setIsLoading(true);
-    try {
-      const newUser: AuthUser = {
-        id: `user-${Date.now()}`,
-        email,
-        name,
-        role: "user",
-      };
-      setUser(newUser);
-      localStorage.setItem("averon_auth_user", JSON.stringify(newUser));
-    } finally {
+    if (!supabase) {
       setIsLoading(false);
+      return { error: new Error("Supabase client is not initialized") };
     }
+    const { error } = await supabase.auth.signUp({ 
+      email, 
+      password,
+      options: {
+        data: {
+          full_name: name
+        }
+      }
+    });
+    setIsLoading(false);
+    return { error };
   };
 
   const logout = async () => {
-    const supabase = createClient();
+    setIsLoading(true);
     if (supabase) {
       await supabase.auth.signOut();
     }
     setUser(null);
-    localStorage.removeItem("averon_auth_user");
-  };
-
-  const switchRole = (newRole: RoleType) => {
-    if (!user) {
-      const demoUser: AuthUser = {
-        id: `user-${newRole}`,
-        email: `${newRole}@averonrealty.com`,
-        name: `Averon ${newRole.charAt(0).toUpperCase() + newRole.slice(1)}`,
-        role: newRole,
-      };
-      setUser(demoUser);
-      localStorage.setItem("averon_auth_user", JSON.stringify(demoUser));
-      return;
-    }
-    const updated = { ...user, role: newRole };
-    setUser(updated);
-    localStorage.setItem("averon_auth_user", JSON.stringify(updated));
+    setIsLoading(false);
   };
 
   return (
@@ -138,7 +137,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         signup,
         logout,
-        switchRole,
       }}
     >
       {children}

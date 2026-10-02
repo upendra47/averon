@@ -40,31 +40,45 @@ export default function ManageAdminsPage() {
     loadData();
   }, []);
 
+  const activeAdminCount = roles.filter((r) => r.role === "admin" && !r.revoked_at).length;
+  const atAdminCap = activeAdminCount >= 3;
+
   const handleGrant = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmail.trim()) return;
-
-    await DataService.grantUserRole(`user-${Date.now()}`, newEmail.trim(), "admin");
-    setStatusMsg(`Admin role successfully granted to ${newEmail.trim()}`);
-    setNewEmail("");
-    loadData();
-    setTimeout(() => setStatusMsg(""), 4000);
+    const result = await DataService.grantUserRole("", newEmail.trim(), "admin");
+    if (!result.success) {
+      setStatusMsg(`❌ Error: ${result.error || "Failed to grant role."}`);
+    } else {
+      setStatusMsg(`Admin role successfully granted to ${newEmail.trim()}`);
+      setNewEmail("");
+      loadData();
+    }
+    setTimeout(() => setStatusMsg(""), 5000);
   };
 
   const handleRevoke = async (roleId: string, email?: string) => {
     if (confirm(`Revoke admin privileges for ${email || "this user"} immediately?`)) {
-      await DataService.revokeUserRole(roleId);
-      setStatusMsg(`Admin role revoked for ${email || "user"}. Access cancelled.`);
-      loadData();
-      setTimeout(() => setStatusMsg(""), 4000);
+      const result = await DataService.revokeUserRole(roleId);
+      if (!result.success) {
+        setStatusMsg(`❌ Error: ${result.error || "Failed to revoke role."}`);
+      } else {
+        setStatusMsg(`Admin role revoked for ${email || "user"}. Access cancelled.`);
+        loadData();
+      }
+      setTimeout(() => setStatusMsg(""), 5000);
     }
   };
 
   const handleReactivate = async (userId: string, email: string) => {
-    await DataService.grantUserRole(userId, email, "admin");
-    setStatusMsg(`Admin privileges restored for ${email}`);
-    loadData();
-    setTimeout(() => setStatusMsg(""), 4000);
+    const result = await DataService.grantUserRole(userId, email, "admin");
+    if (!result.success) {
+      setStatusMsg(`❌ Error: ${result.error || "Failed to restore role."}`);
+    } else {
+      setStatusMsg(`Admin privileges restored for ${email}`);
+      loadData();
+    }
+    setTimeout(() => setStatusMsg(""), 5000);
   };
 
   if (!isDeveloper) {
@@ -152,25 +166,38 @@ export default function ManageAdminsPage() {
 
         {/* Action Status Toast */}
         {statusMsg && (
-          <div className="p-4 bg-green-50 border border-green-200 text-green-800 text-xs rounded-lg flex items-center gap-2 animate-fadeIn font-medium">
-            <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+          <div className={`p-4 border text-xs rounded-lg flex items-center gap-2 font-medium ${statusMsg.startsWith("❌") ? "bg-red-50 border-red-200 text-red-800" : "bg-green-50 border-green-200 text-green-800 animate-fadeIn"}`}>
+            <CheckCircle2 className={`w-4 h-4 shrink-0 ${statusMsg.startsWith("❌") ? "text-red-600" : "text-green-600"}`} />
             <span>{statusMsg}</span>
           </div>
         )}
 
         {/* Grant Admin Form Card */}
         <div className="bg-white border border-brand-border rounded-lg p-6 shadow-xs space-y-4">
-          <div className="flex items-center gap-2">
-            <UserPlus className="w-5 h-5 text-brand-accent" />
-            <div>
-              <h2 className="text-sm font-bold text-brand-fg uppercase tracking-wider">
-                Grant New Admin Role
-              </h2>
-              <p className="text-xs text-brand-muted">
-                Assign property creation, editing, and inquiry management access to a verified email.
-              </p>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <UserPlus className="w-5 h-5 text-brand-accent" />
+              <div>
+                <h2 className="text-sm font-bold text-brand-fg uppercase tracking-wider">
+                  Grant New Admin Role
+                </h2>
+                <p className="text-xs text-brand-muted">
+                  Assign property creation, editing, and inquiry management access to a verified email.
+                </p>
+              </div>
+            </div>
+            {/* Active Admins counter */}
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded border text-xs font-semibold ${atAdminCap ? "bg-red-50 border-red-200 text-red-700" : "bg-neutral-50 border-brand-border text-brand-fg"}`}>
+              Active Admins: {activeAdminCount} / 3
+              {atAdminCap && <span className="ml-1 text-[10px] font-bold uppercase tracking-wider text-red-600">Cap Reached</span>}
             </div>
           </div>
+
+          {atAdminCap && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded text-xs">
+              The maximum of 3 active admins has been reached. Revoke an existing admin role before granting a new one.
+            </div>
+          )}
 
           <form onSubmit={handleGrant} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
             <input
@@ -179,11 +206,13 @@ export default function ManageAdminsPage() {
               placeholder="Enter user email address (e.g. broker@averonrealty.com)"
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
-              className="flex-1 px-3.5 py-2 text-xs bg-neutral-50 border border-brand-border rounded focus:bg-white focus:border-brand-accent focus:outline-none"
+              disabled={atAdminCap}
+              className="flex-1 px-3.5 py-2 text-xs bg-neutral-50 border border-brand-border rounded focus:bg-white focus:border-brand-accent focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <button
               type="submit"
-              className="bg-brand-cta text-brand-ctaFg hover:bg-black transition-colors px-6 py-2 rounded text-xs font-bold uppercase tracking-wider shrink-0"
+              disabled={atAdminCap}
+              className="bg-brand-cta text-brand-ctaFg hover:bg-black transition-colors px-6 py-2 rounded text-xs font-bold uppercase tracking-wider shrink-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-cta"
             >
               Grant Admin Role
             </button>

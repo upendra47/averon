@@ -416,11 +416,73 @@ export const DataService = {
   },
 
   // Admin / Developer features
-  async createProperty(property: Partial<Property>): Promise<{ success: boolean; data?: Property }> {
+  async createProperty(property: Partial<Property>): Promise<{ success: boolean; data?: Property; error?: string }> {
+    const supabase = createClient();
+    if (supabase) {
+      const { data: { user: actor } } = await supabase.auth.getUser();
+
+      const { data, error } = await supabase
+        .from("properties")
+        .insert({
+          title: property.title || "Untitled Property",
+          description: property.description || "",
+          property_type: property.property_type || "apartment",
+          listing_type: property.listing_type || "sale",
+          price: property.price || 0,
+          price_unit: "INR",
+          bedrooms: property.bedrooms ?? 2,
+          bathrooms: property.bathrooms ?? 2,
+          area_sqft: property.area_sqft ?? 1200,
+          address: property.address || "",
+          city_id: property.city_id || null,
+          state_id: property.state_id || null,
+          latitude: property.latitude || null,
+          longitude: property.longitude || null,
+          status: property.status || "available",
+          featured: property.featured || false,
+          created_by: actor?.id,
+          last_edited_by: actor?.id,
+        })
+        .select()
+        .single();
+
+      if (error) return { success: false, error: error.message };
+
+      // Insert images
+      if (property.images && property.images.length > 0) {
+        await supabase.from("property_images").insert(
+          property.images.map((img, i) => ({
+            property_id: data.id,
+            image_url: img.image_url,
+            is_primary: i === 0,
+            sort_order: i + 1,
+          }))
+        );
+      }
+
+      // Insert amenities
+      if (property.amenities && property.amenities.length > 0) {
+        await supabase.from("property_amenities").insert(
+          property.amenities.map((a) => ({ property_id: data.id, amenity: a }))
+        );
+      }
+
+      // Audit log
+      await supabase.from("audit_log").insert({
+        actor_id: actor?.id,
+        action: "CREATE_PROPERTY",
+        target_table: "properties",
+        target_id: data.id,
+        details: { title: data.title, price: data.price },
+      });
+
+      return { success: true, data };
+    }
+
+    // Local fallback
     const newId = `prop-${Date.now()}`;
     const city = SEED_CITIES.find((c) => c.id === property.city_id);
     const state = SEED_STATES.find((s) => s.id === property.state_id);
-
     const fullProp: Property = {
       id: newId,
       title: property.title || "Untitled Property",
@@ -443,136 +505,209 @@ export const DataService = {
       featured: property.featured || false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      images: property.images && property.images.length > 0
-        ? property.images
-        : [
-            {
-              id: `img-${Date.now()}`,
-              property_id: newId,
-              image_url:
-                "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1600&q=80",
-              is_primary: true,
-              sort_order: 1,
-            },
-          ],
+      images: property.images && property.images.length > 0 ? property.images : [{ id: `img-${Date.now()}`, property_id: newId, image_url: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1600&q=80", is_primary: true, sort_order: 1 }],
       amenities: property.amenities || ["24/7 Security", "Covered Parking"],
     };
-
     localProperties = [fullProp, ...localProperties];
-
-    localAuditLogs.unshift({
-      id: `log-${Date.now()}`,
-      actor_id: "admin-001",
-      actor_email: "propertys.bengaluru@gmail.com",
-      action: "CREATE_PROPERTY",
-      target_table: "properties",
-      target_id: newId,
-      details: { title: fullProp.title, price: fullProp.price },
-      created_at: new Date().toISOString(),
-    });
-
+    localAuditLogs.unshift({ id: `log-${Date.now()}`, actor_id: "local", actor_email: "local", action: "CREATE_PROPERTY", target_table: "properties", target_id: newId, details: { title: fullProp.title, price: fullProp.price }, created_at: new Date().toISOString() });
     return { success: true, data: fullProp };
   },
 
-  async updateProperty(id: string, property: Partial<Property>): Promise<{ success: boolean; data?: Property }> {
+  async updateProperty(id: string, property: Partial<Property>): Promise<{ success: boolean; data?: Property; error?: string }> {
+    const supabase = createClient();
+    if (supabase) {
+      const { data: { user: actor } } = await supabase.auth.getUser();
+
+      const { data, error } = await supabase
+        .from("properties")
+        .update({
+          ...property,
+          last_edited_by: actor?.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) return { success: false, error: error.message };
+
+      // Delete-then-reinsert amenities & images for MVP simplicity
+      if (property.amenities !== undefined) {
+        await supabase.from("property_amenities").delete().eq("property_id", id);
+        if (property.amenities.length > 0) {
+          await supabase.from("property_amenities").insert(
+            property.amenities.map((a) => ({ property_id: id, amenity: a }))
+          );
+        }
+      }
+
+      if (property.images !== undefined) {
+        await supabase.from("property_images").delete().eq("property_id", id);
+        if (property.images.length > 0) {
+          await supabase.from("property_images").insert(
+            property.images.map((img, i) => ({
+              property_id: id,
+              image_url: img.image_url,
+              is_primary: i === 0,
+              sort_order: i + 1,
+            }))
+          );
+        }
+      }
+
+      await supabase.from("audit_log").insert({
+        actor_id: actor?.id,
+        action: "UPDATE_PROPERTY",
+        target_table: "properties",
+        target_id: id,
+        details: { updated_fields: Object.keys(property) },
+      });
+
+      return { success: true, data };
+    }
+
+    // Local fallback
     const idx = localProperties.findIndex((p) => p.id === id);
-    if (idx === -1) return { success: false };
-
-    const updated = {
-      ...localProperties[idx],
-      ...property,
-      updated_at: new Date().toISOString(),
-    };
+    if (idx === -1) return { success: false, error: "Property not found" };
+    const updated = { ...localProperties[idx], ...property, updated_at: new Date().toISOString() };
     localProperties[idx] = updated;
-
-    localAuditLogs.unshift({
-      id: `log-${Date.now()}`,
-      actor_id: "admin-001",
-      actor_email: "propertys.bengaluru@gmail.com",
-      action: "UPDATE_PROPERTY",
-      target_table: "properties",
-      target_id: id,
-      details: { updated_fields: Object.keys(property) },
-      created_at: new Date().toISOString(),
-    });
-
+    localAuditLogs.unshift({ id: `log-${Date.now()}`, actor_id: "local", actor_email: "local", action: "UPDATE_PROPERTY", target_table: "properties", target_id: id, details: { updated_fields: Object.keys(property) }, created_at: new Date().toISOString() });
     return { success: true, data: updated };
   },
 
-  async deleteProperty(id: string): Promise<{ success: boolean }> {
+  async deleteProperty(id: string): Promise<{ success: boolean; error?: string }> {
+    const supabase = createClient();
+    if (supabase) {
+      const { data: { user: actor } } = await supabase.auth.getUser();
+
+      const { error } = await supabase.from("properties").delete().eq("id", id);
+      if (error) return { success: false, error: error.message };
+
+      await supabase.from("audit_log").insert({
+        actor_id: actor?.id,
+        action: "DELETE_PROPERTY",
+        target_table: "properties",
+        target_id: id,
+        details: { deleted_property_id: id },
+      });
+
+      return { success: true };
+    }
+
+    // Local fallback
     localProperties = localProperties.filter((p) => p.id !== id);
-
-    localAuditLogs.unshift({
-      id: `log-${Date.now()}`,
-      actor_id: "admin-001",
-      actor_email: "propertys.bengaluru@gmail.com",
-      action: "DELETE_PROPERTY",
-      target_table: "properties",
-      target_id: id,
-      details: { deleted_property_id: id },
-      created_at: new Date().toISOString(),
-    });
-
+    localAuditLogs.unshift({ id: `log-${Date.now()}`, actor_id: "local", actor_email: "local", action: "DELETE_PROPERTY", target_table: "properties", target_id: id, details: { deleted_property_id: id }, created_at: new Date().toISOString() });
     return { success: true };
   },
 
   // Roles & Admin Management
   async getUserRoles(): Promise<UserRole[]> {
+    const supabase = createClient();
+    if (supabase) {
+      const { data, error } = await supabase
+        .from("user_roles_view")
+        .select("*")
+        .order("granted_at", { ascending: false });
+      if (!error && data) return data as UserRole[];
+    }
     return localRoles;
   },
 
-  async grantUserRole(userId: string, email: string, role: "admin" | "user"): Promise<{ success: boolean }> {
-    const existing = localRoles.find((r) => r.user_id === userId || r.user_email === email);
+  async grantUserRole(_userId: string, email: string, role: "admin" | "user"): Promise<{ success: boolean; error?: string }> {
+    const supabase = createClient();
+    if (supabase) {
+      // Look up the user id from email via secure RPC
+      const { data: lookupData, error: lookupError } = await supabase
+        .rpc("get_user_id_by_email", { lookup_email: email });
+      if (lookupError || !lookupData) {
+        return { success: false, error: "No account found with that email address." };
+      }
+      const { data: { user: actor } } = await supabase.auth.getUser();
+
+      const { data, error } = await supabase
+        .from("user_roles")
+        .insert({ user_id: lookupData, role, granted_by: actor?.id })
+        .select()
+        .single();
+
+      if (error) return { success: false, error: error.message };
+
+      // Audit log
+      await supabase.from("audit_log").insert({
+        actor_id: actor?.id,
+        action: "GRANT_ROLE",
+        target_table: "user_roles",
+        target_id: data.id,
+        details: { role, email },
+      });
+
+      return { success: true };
+    }
+
+    // Local fallback
+    const existing = localRoles.find((r) => r.user_email === email);
     if (existing) {
       existing.role = role;
       existing.revoked_at = null;
       existing.granted_at = new Date().toISOString();
     } else {
-      const newRole: UserRole = {
+      localRoles = [...localRoles, {
         id: `role-${Date.now()}`,
-        user_id: userId || `user-${Date.now()}`,
+        user_id: `user-${Date.now()}`,
         user_email: email,
-        role: role,
+        role,
         granted_at: new Date().toISOString(),
         revoked_at: null,
-      };
-      localRoles = [...localRoles, newRole];
+      }];
     }
-
-    localAuditLogs.unshift({
-      id: `log-${Date.now()}`,
-      actor_id: "dev-001",
-      actor_email: "dev@averonrealty.com",
-      action: "GRANT_ROLE",
-      target_table: "user_roles",
-      target_id: email,
-      details: { role, email },
-      created_at: new Date().toISOString(),
-    });
-
+    localAuditLogs.unshift({ id: `log-${Date.now()}`, actor_id: "dev-001", actor_email: "dev@averonrealty.com", action: "GRANT_ROLE", target_table: "user_roles", target_id: email, details: { role, email }, created_at: new Date().toISOString() });
     return { success: true };
   },
 
-  async revokeUserRole(roleId: string): Promise<{ success: boolean }> {
-    const roleObj = localRoles.find((r) => r.id === roleId);
-    if (roleObj) {
-      roleObj.revoked_at = new Date().toISOString();
+  async revokeUserRole(roleId: string): Promise<{ success: boolean; error?: string }> {
+    const supabase = createClient();
+    if (supabase) {
+      const { data: { user: actor } } = await supabase.auth.getUser();
 
-      localAuditLogs.unshift({
-        id: `log-${Date.now()}`,
-        actor_id: "dev-001",
-        actor_email: "dev@averonrealty.com",
+      // Get email before revoking for audit log
+      const { data: roleRow } = await supabase.from("user_roles").select("user_id").eq("id", roleId).single();
+
+      const { error } = await supabase
+        .from("user_roles")
+        .update({ revoked_at: new Date().toISOString() })
+        .eq("id", roleId);
+
+      if (error) return { success: false, error: error.message };
+
+      await supabase.from("audit_log").insert({
+        actor_id: actor?.id,
         action: "REVOKE_ROLE",
         target_table: "user_roles",
         target_id: roleId,
-        details: { revoked_role_for: roleObj.user_email },
-        created_at: new Date().toISOString(),
+        details: { revoked_user_id: roleRow?.user_id },
       });
+
+      return { success: true };
+    }
+
+    // Local fallback
+    const roleObj = localRoles.find((r) => r.id === roleId);
+    if (roleObj) {
+      roleObj.revoked_at = new Date().toISOString();
+      localAuditLogs.unshift({ id: `log-${Date.now()}`, actor_id: "dev-001", actor_email: "dev@averonrealty.com", action: "REVOKE_ROLE", target_table: "user_roles", target_id: roleId, details: { revoked_role_for: roleObj.user_email }, created_at: new Date().toISOString() });
     }
     return { success: true };
   },
 
   async getAuditLogs(): Promise<AuditLog[]> {
+    const supabase = createClient();
+    if (supabase) {
+      const { data, error } = await supabase
+        .from("audit_log")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (!error && data) return data as AuditLog[];
+    }
     return localAuditLogs;
   },
 };

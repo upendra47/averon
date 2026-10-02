@@ -15,15 +15,12 @@ import {
   LayoutDashboard,
   User,
   LogOut,
-  ChevronDown,
 } from "lucide-react";
-import { RoleType } from "@/types";
 
 export function Header() {
   const pathname = usePathname();
-  const { user, role, switchRole, logout, isAuthenticated } = useAuth();
+  const { user, role, logout, isAuthenticated } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
 
   const navLinks = [
     { name: "Explore All", href: "/properties" },
@@ -32,11 +29,6 @@ export function Header() {
     { name: "About", href: "/about" },
     { name: "Contact", href: "/contact" },
   ];
-
-  const handleRoleChange = (newRole: RoleType) => {
-    switchRole(newRole);
-    setRoleDropdownOpen(false);
-  };
 
   return (
     <header className="w-full bg-brand-bg border-b border-brand-border sticky top-0 z-50">
@@ -67,40 +59,6 @@ export function Header() {
           </div>
 
           <div className="flex items-center gap-4 text-[11px]">
-            {/* Quick Role Tester / Switcher Pill */}
-            <div className="relative">
-              <button
-                onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
-                className="flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-[#333] hover:border-brand-accent transition-colors bg-[#1A1A1A] text-white"
-                title="Switch role for testing capabilities"
-              >
-                <span className="w-2 h-2 rounded-full bg-brand-accent animate-pulse" />
-                <span className="uppercase text-[10px] tracking-wider font-semibold">
-                  Role: {role}
-                </span>
-                <ChevronDown className="w-3 h-3 text-gray-400" />
-              </button>
-
-              {roleDropdownOpen && (
-                <div className="absolute right-0 mt-1 w-44 bg-[#1A1A1A] border border-[#333] rounded shadow-xl py-1 z-50 text-left">
-                  <div className="px-3 py-1 text-[10px] text-gray-400 uppercase tracking-wider border-b border-[#2a2a2a]">
-                    Test Permissions
-                  </div>
-                  {(["developer", "admin", "user"] as RoleType[]).map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => handleRoleChange(r)}
-                      className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-[#252525] transition-colors ${
-                        role === r ? "text-brand-accent font-semibold" : "text-gray-200"
-                      }`}
-                    >
-                      <span className="capitalize">{r}</span>
-                      {role === r && <span className="text-[10px]">●</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
 
             {role === "developer" && (
               <Link

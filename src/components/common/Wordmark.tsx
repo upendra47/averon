@@ -19,17 +19,10 @@ export function Wordmark({
   return (
     <Link href="/" className={cn("inline-flex flex-col group", className)}>
       <div className="flex items-center tracking-[0.25em] text-xl font-bold font-sans">
-        <span className={baseColor}>AVE</span>
-        <span className="text-brand-accent">R</span>
-        <span className={baseColor}>ON</span>
+        <span className={baseColor}>AVERON</span>
       </div>
       {showSubtitle && (
-        <span
-          className={cn(
-            "text-[9px] uppercase tracking-[0.35em] font-medium -mt-0.5",
-            isDarkBg ? "text-brand-footerMuted" : "text-brand-muted"
-          )}
-        >
+        <span className="text-[9px] uppercase tracking-[0.35em] font-medium -mt-0.5 text-brand-accent">
           Realty
         </span>
       )}
