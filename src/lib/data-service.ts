@@ -324,7 +324,7 @@ export const DataService = {
   }): Promise<{ success: boolean; id?: string; error?: string }> {
     const supabase = createClient();
     if (supabase) {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("inquiries")
         .insert({
           property_id: inquiry.property_id || null,
@@ -332,18 +332,13 @@ export const DataService = {
           email: inquiry.email,
           phone: inquiry.phone,
           message: inquiry.message,
-        })
-        .select()
-        .single();
+        });
 
       if (error) {
         console.error("submitInquiry failed:", error.message);
         return { success: false, error: error.message };
       }
-      
-      if (data) {
-        return { success: true, id: data.id };
-      }
+      return { success: true };
     }
 
     const newInquiry: Inquiry = {
