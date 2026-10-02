@@ -8,7 +8,6 @@ import { Property } from "@/types";
 import { DataService } from "@/lib/data-service";
 import { formatIndianPrice, formatArea, cn } from "@/lib/utils";
 import { InquiryModal } from "@/components/properties/InquiryModal";
-import { PaymentStubModal } from "@/components/properties/PaymentStubModal";
 import { PropertyCard } from "@/components/properties/PropertyCard";
 import {
   Bed,
@@ -23,7 +22,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Share2,
-  Lock,
   Sparkles,
   Calendar,
 } from "lucide-react";
@@ -37,7 +35,6 @@ export default function PropertyDetailPage() {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
   const [isInquiryModalOpen, setIsInquiryModalOpen] = useState(false);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [relatedProperties, setRelatedProperties] = useState<Property[]>([]);
 
@@ -422,14 +419,7 @@ export default function PropertyDetailPage() {
                   <span>Enquire About Property</span>
                 </button>
 
-                {/* Section 1 Decision: "Pay Token Amount" UI Stub */}
-                <button
-                  onClick={() => setIsPaymentModalOpen(true)}
-                  className="w-full py-3 px-4 bg-white border border-brand-fg hover:bg-neutral-50 text-brand-fg transition-colors rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2"
-                >
-                  <Lock className="w-3.5 h-3.5 text-brand-accent" />
-                  <span>Pay Token Amount (Demo)</span>
-                </button>
+
 
                 <a
                   href="tel:+917996379793"
@@ -508,13 +498,6 @@ export default function PropertyDetailPage() {
         property={property}
         isOpen={isInquiryModalOpen}
         onClose={() => setIsInquiryModalOpen(false)}
-      />
-
-      {/* Section 1: Payment Stub Modal */}
-      <PaymentStubModal
-        property={property}
-        isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
       />
     </div>
   );

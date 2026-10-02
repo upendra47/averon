@@ -22,31 +22,34 @@ export function InquiryModal({ property, isOpen, onClose }: InquiryModalProps) {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setSubmitError(null);
 
-    try {
-      await DataService.submitInquiry({
-        property_id: property?.id || null,
-        property_title: property?.title || "General Advisory Inquiry",
-        name,
-        email,
-        phone,
-        message,
-      });
+    const result = await DataService.submitInquiry({
+      property_id: property?.id || null,
+      property_title: property?.title || "General Advisory Inquiry",
+      name,
+      email,
+      phone,
+      message,
+    });
+
+    setIsSubmitting(false);
+
+    if (!result.success) {
+      setSubmitError(result.error || "Submission failed. Please try again.");
+    } else {
       setIsSuccess(true);
       setTimeout(() => {
         setIsSuccess(false);
         onClose();
       }, 2500);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -151,18 +154,25 @@ export function InquiryModal({ property, isOpen, onClose }: InquiryModalProps) {
                 />
               </div>
 
-              <div className="pt-2 flex items-center justify-between">
-                <span className="text-[11px] text-brand-muted">
-                  Advisor line: +91 7996379793
-                </span>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="bg-brand-cta text-brand-ctaFg hover:bg-black transition-colors px-6 py-2.5 rounded text-xs font-semibold uppercase tracking-wider flex items-center gap-2"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{isSubmitting ? "Sending..." : "Submit Inquiry"}</span>
-                </button>
+              <div className="pt-2 flex flex-col gap-3">
+                {submitError && (
+                  <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+                    ⚠ {submitError}
+                  </p>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-brand-muted">
+                    Advisor line: +91 7996379793
+                  </span>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="bg-brand-cta text-brand-ctaFg hover:bg-black transition-colors px-6 py-2.5 rounded text-xs font-semibold uppercase tracking-wider flex items-center gap-2"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{isSubmitting ? "Sending..." : "Submit Inquiry"}</span>
+                  </button>
+                </div>
               </div>
             </form>
           )}

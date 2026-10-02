@@ -12,27 +12,30 @@ export default function ContactPage() {
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setSubmitError(null);
 
-    try {
-      await DataService.submitInquiry({
-        name,
-        email,
-        phone,
-        message: `Subject: ${subject}\n\n${message}`,
-      });
+    const result = await DataService.submitInquiry({
+      name,
+      email,
+      phone,
+      message: `Subject: ${subject}\n\n${message}`,
+    });
+
+    setIsSubmitting(false);
+
+    if (!result.success) {
+      setSubmitError(result.error || "Submission failed. Please try again.");
+    } else {
       setIsSubmitted(true);
       setName("");
       setEmail("");
       setPhone("");
       setMessage("");
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -239,6 +242,12 @@ export default function ContactPage() {
                       className="w-full p-3 text-xs bg-neutral-50 border border-brand-border rounded focus:bg-white focus:border-brand-accent focus:outline-none"
                     />
                   </div>
+
+                  {submitError && (
+                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+                      ⚠ {submitError}
+                    </p>
+                  )}
 
                   <button
                     type="submit"

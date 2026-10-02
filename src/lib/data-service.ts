@@ -321,7 +321,7 @@ export const DataService = {
     email: string;
     phone?: string | null;
     message: string;
-  }): Promise<{ success: boolean; id?: string }> {
+  }): Promise<{ success: boolean; id?: string; error?: string }> {
     const supabase = createClient();
     if (supabase) {
       const { data, error } = await supabase
@@ -336,7 +336,12 @@ export const DataService = {
         .select()
         .single();
 
-      if (!error && data) {
+      if (error) {
+        console.error("submitInquiry failed:", error.message);
+        return { success: false, error: error.message };
+      }
+      
+      if (data) {
         return { success: true, id: data.id };
       }
     }
