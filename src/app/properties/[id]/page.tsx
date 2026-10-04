@@ -499,14 +499,9 @@ export default function PropertyDetailPage() {
       <InquiryModal
         property={property}
         isOpen={isInquiryModalOpen}
-        onClose={() => {
-          if (hasSubmittedInquiry) {
-            setIsInquiryModalOpen(false);
-          } else {
-            router.push("/properties");
-          }
-        }}
+        onClose={() => router.push("/properties")}
         onSuccess={() => setHasSubmittedInquiry(true)}
+        onSuccessClose={() => setIsInquiryModalOpen(false)}
       />
     </div>
   );

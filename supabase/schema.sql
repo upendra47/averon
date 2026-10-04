@@ -78,7 +78,8 @@ create table if not exists inquiries (
   email text,
   phone text,
   message text,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  constraint inquiries_phone_format check (phone ~ '^[0-9]{10}$')
 );
 
 -- 8. Favorites Table

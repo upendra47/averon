@@ -10,9 +10,10 @@ interface InquiryModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  onSuccessClose?: () => void;
 }
 
-export function InquiryModal({ property, isOpen, onClose, onSuccess }: InquiryModalProps) {
+export function InquiryModal({ property, isOpen, onClose, onSuccess, onSuccessClose }: InquiryModalProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -50,7 +51,7 @@ export function InquiryModal({ property, isOpen, onClose, onSuccess }: InquiryMo
       onSuccess?.();
       setTimeout(() => {
         setIsSuccess(false);
-        onClose();
+        (onSuccessClose ?? onClose)();
       }, 2500);
     }
   };
@@ -69,7 +70,7 @@ export function InquiryModal({ property, isOpen, onClose, onSuccess }: InquiryMo
             </h3>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => (isSuccess ? (onSuccessClose ?? onClose)() : onClose())}
             className="p-1 rounded text-neutral-400 hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
@@ -135,7 +136,9 @@ export function InquiryModal({ property, isOpen, onClose, onSuccess }: InquiryMo
                       required
                       placeholder="+91 9876543210"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                      pattern="[0-9]{10}"
+                      maxLength={10}
                       className="w-full pl-9 pr-3 py-2 text-xs bg-neutral-50 border border-brand-border rounded focus:bg-white focus:border-brand-accent focus:outline-none"
                     />
                   </div>
