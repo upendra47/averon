@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Property } from "@/types";
 import { DataService } from "@/lib/data-service";
 import { formatIndianPrice, formatArea, cn } from "@/lib/utils";
@@ -28,13 +28,15 @@ import {
 
 export default function PropertyDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = params?.id as string;
 
   const [property, setProperty] = useState<Property | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
-  const [isInquiryModalOpen, setIsInquiryModalOpen] = useState(false);
+  const [isInquiryModalOpen, setIsInquiryModalOpen] = useState(true);
+  const [hasSubmittedInquiry, setHasSubmittedInquiry] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [relatedProperties, setRelatedProperties] = useState<Property[]>([]);
 
@@ -497,7 +499,14 @@ export default function PropertyDetailPage() {
       <InquiryModal
         property={property}
         isOpen={isInquiryModalOpen}
-        onClose={() => setIsInquiryModalOpen(false)}
+        onClose={() => {
+          if (hasSubmittedInquiry) {
+            setIsInquiryModalOpen(false);
+          } else {
+            router.push("/properties");
+          }
+        }}
+        onSuccess={() => setHasSubmittedInquiry(true)}
       />
     </div>
   );

@@ -75,7 +75,7 @@ create table if not exists inquiries (
   id uuid primary key default gen_random_uuid(),
   property_id uuid references properties(id) on delete set null,
   name text not null,
-  email text not null,
+  email text,
   phone text,
   message text,
   created_at timestamptz default now()

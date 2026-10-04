@@ -9,9 +9,10 @@ interface InquiryModalProps {
   property?: Property;
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
-export function InquiryModal({ property, isOpen, onClose }: InquiryModalProps) {
+export function InquiryModal({ property, isOpen, onClose, onSuccess }: InquiryModalProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -46,6 +47,7 @@ export function InquiryModal({ property, isOpen, onClose }: InquiryModalProps) {
       setSubmitError(result.error || "Submission failed. Please try again.");
     } else {
       setIsSuccess(true);
+      onSuccess?.();
       setTimeout(() => {
         setIsSuccess(false);
         onClose();
@@ -108,13 +110,12 @@ export function InquiryModal({ property, isOpen, onClose }: InquiryModalProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-brand-fg mb-1">
-                    Email Address *
+                    Email Address
                   </label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-brand-muted absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="email"
-                      required
                       placeholder="name@company.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
