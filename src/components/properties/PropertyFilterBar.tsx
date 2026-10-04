@@ -43,6 +43,20 @@ const SORT_OPTIONS = [
   { label: "Featured First", value: "featured" },
 ];
 
+const PRICE_RANGES: { label: string; min?: number; max?: number }[] = [
+  { label: "Any" },
+  { label: "₹25 to ₹50 Lakhs", min: 2_500_000, max: 5_000_000 },
+  { label: "₹50 to ₹75 Lakhs", min: 5_000_000, max: 7_500_000 },
+  { label: "₹75 to ₹100 Lakhs", min: 7_500_000, max: 10_000_000 },
+  { label: "₹1 to ₹1.5 Crores", min: 10_000_000, max: 15_000_000 },
+  { label: "₹1.5 to ₹2 Crores", min: 15_000_000, max: 20_000_000 },
+  { label: "₹2 to ₹3 Crores", min: 20_000_000, max: 30_000_000 },
+  { label: "₹3 to ₹5 Crores", min: 30_000_000, max: 50_000_000 },
+  { label: "₹5 to ₹7 Crores", min: 50_000_000, max: 70_000_000 },
+  { label: "₹7 to ₹10 Crores", min: 70_000_000, max: 100_000_000 },
+  { label: "₹10 Crores to Above", min: 100_000_000 },
+];
+
 export function PropertyFilterBar({
   onFiltersChange,
   initialFilters,
@@ -391,22 +405,32 @@ export function PropertyFilterBar({
               <label className="block text-xs uppercase tracking-wider font-semibold text-brand-fg mb-2">
                 Price Range (₹ INR)
               </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  placeholder="Min (e.g. 5000000)"
-                  value={minPrice}
-                  onChange={(e) => setMinPrice(e.target.value)}
-                  className="w-1/2 px-3 py-1.5 text-xs bg-white border border-brand-border rounded focus:border-brand-accent focus:outline-none"
-                />
-                <span className="text-neutral-400 text-xs">to</span>
-                <input
-                  type="number"
-                  placeholder="Max (e.g. 80000000)"
-                  value={maxPrice}
-                  onChange={(e) => setMaxPrice(e.target.value)}
-                  className="w-1/2 px-3 py-1.5 text-xs bg-white border border-brand-border rounded focus:border-brand-accent focus:outline-none"
-                />
+              <div className="flex flex-wrap gap-2">
+                {PRICE_RANGES.map((range) => {
+                  const isActive =
+                    minPrice === (range.min ? String(range.min) : "") &&
+                    maxPrice === (range.max ? String(range.max) : "");
+                  return (
+                    <button
+                      key={range.label}
+                      type="button"
+                      onClick={() => {
+                        const nextMin = range.min ? String(range.min) : "";
+                        const nextMax = range.max ? String(range.max) : "";
+                        setMinPrice(nextMin);
+                        setMaxPrice(nextMax);
+                        applyFilters({ min_price: range.min, max_price: range.max });
+                      }}
+                      className={`py-1.5 px-3 rounded text-xs font-medium border text-center transition-all ${
+                        isActive
+                          ? "bg-brand-fg text-white border-brand-fg"
+                          : "bg-white border-brand-border text-brand-fg hover:border-brand-fg"
+                      }`}
+                    >
+                      {range.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
