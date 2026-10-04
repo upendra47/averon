@@ -405,33 +405,26 @@ export function PropertyFilterBar({
               <label className="block text-xs uppercase tracking-wider font-semibold text-brand-fg mb-2">
                 Price Range (₹ INR)
               </label>
-              <div className="flex flex-wrap gap-2">
-                {PRICE_RANGES.map((range) => {
-                  const isActive =
-                    minPrice === (range.min ? String(range.min) : "") &&
-                    maxPrice === (range.max ? String(range.max) : "");
-                  return (
-                    <button
-                      key={range.label}
-                      type="button"
-                      onClick={() => {
-                        const nextMin = range.min ? String(range.min) : "";
-                        const nextMax = range.max ? String(range.max) : "";
-                        setMinPrice(nextMin);
-                        setMaxPrice(nextMax);
-                        applyFilters({ min_price: range.min, max_price: range.max });
-                      }}
-                      className={`py-1.5 px-3 rounded text-xs font-medium border text-center transition-all ${
-                        isActive
-                          ? "bg-brand-fg text-white border-brand-fg"
-                          : "bg-white border-brand-border text-brand-fg hover:border-brand-fg"
-                      }`}
-                    >
-                      {range.label}
-                    </button>
-                  );
-                })}
-              </div>
+              <select
+                value={PRICE_RANGES.findIndex(
+                  (r) => minPrice === (r.min ? String(r.min) : "") && maxPrice === (r.max ? String(r.max) : "")
+                )}
+                onChange={(e) => {
+                  const range = PRICE_RANGES[Number(e.target.value)];
+                  const nextMin = range.min ? String(range.min) : "";
+                  const nextMax = range.max ? String(range.max) : "";
+                  setMinPrice(nextMin);
+                  setMaxPrice(nextMax);
+                  applyFilters({ min_price: range.min, max_price: range.max });
+                }}
+                className="w-full px-3 py-2 bg-white border border-brand-border rounded text-xs text-brand-fg focus:border-brand-accent focus:outline-none"
+              >
+                {PRICE_RANGES.map((range, i) => (
+                  <option key={range.label} value={i}>
+                    {range.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Area (sqft) */}
