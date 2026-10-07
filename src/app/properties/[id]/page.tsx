@@ -172,7 +172,24 @@ export default function PropertyDetailPage() {
           }}
           aria-label="Property image gallery"
         >
-          <div className="relative aspect-[16/9] md:aspect-[21/9] w-full rounded-lg overflow-hidden bg-neutral-900 border border-brand-border shadow-sm">
+          <div
+            className="relative aspect-[16/9] md:aspect-[21/9] w-full rounded-lg overflow-hidden bg-neutral-900 border border-brand-border shadow-sm"
+            onTouchStart={(e) => {
+              (e.currentTarget as HTMLDivElement).dataset.touchStartX = String(e.touches[0].clientX);
+            }}
+            onTouchEnd={(e) => {
+              if (images.length <= 1) return;
+              const startX = Number((e.currentTarget as HTMLDivElement).dataset.touchStartX || 0);
+              const delta = e.changedTouches[0].clientX - startX;
+              if (Math.abs(delta) > 50) {
+                setActiveImageIndex((prev) =>
+                  delta < 0
+                    ? (prev + 1) % images.length
+                    : (prev - 1 + images.length) % images.length
+                );
+              }
+            }}
+          >
             {/* Primary image — use native img to support any hostname */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
