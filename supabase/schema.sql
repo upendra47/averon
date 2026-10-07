@@ -36,7 +36,8 @@ create table if not exists properties (
   description text,
   property_type text check (property_type in ('apartment','villa','plot','commercial','office','shop')) not null,
   listing_type text check (listing_type in ('sale','rent')) not null,
-  price numeric not null,
+  price text not null,
+  price_value numeric,
   price_unit text default 'INR',
   bedrooms int,
   bathrooms int,
@@ -239,3 +240,45 @@ create policy "Admins and developers can view audit log" on audit_log
 
 create policy "Admins and developers can create audit log entries" on audit_log
   for insert with check (is_admin_or_dev(auth.uid()));
+
+-- ========================================================
+-- Storage: property-images bucket
+-- ========================================================
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'property-images',
+  'property-images',
+  true,
+  5242880,
+  '{"image/jpeg","image/png","image/webp"}'
+) on conflict (id) do nothing;
+
+-- Storage RLS Policies
+create policy "Public SELECT on property-images"
+  on storage.objects for select
+  using ( bucket_id = 'property-images' );
+
+create policy "Admins/Developers INSERT on property-images"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'property-images' and
+    (auth.uid() = owner) and
+    (public.is_admin_or_dev(auth.uid()))
+  );
+
+create policy "Admins/Developers UPDATE on property-images"
+  on storage.objects for update
+  using (
+    bucket_id = 'property-images' and
+    (auth.uid() = owner) and
+    (public.is_admin_or_dev(auth.uid()))
+  );
+
+create policy "Admins/Developers DELETE on property-images"
+  on storage.objects for delete
+  using (
+    bucket_id = 'property-images' and
+    (auth.uid() = owner) and
+    (public.is_admin_or_dev(auth.uid()))
+  );

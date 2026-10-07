@@ -47,7 +47,8 @@ export interface Property {
   description: string;
   property_type: PropertyType;
   listing_type: ListingType;
-  price: number;
+  price: string;
+  price_value?: number | null;
   price_unit: string;
   bedrooms?: number | null;
   bathrooms?: number | null;

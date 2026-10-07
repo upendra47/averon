@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { Property } from "@/types";
 import { DataService } from "@/lib/data-service";
@@ -160,17 +159,34 @@ export default function PropertyDetailPage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-8 space-y-8">
         {/* Main Gallery Section */}
-        <div className="space-y-3">
+        <div
+          className="space-y-3"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (images.length <= 1) return;
+            if (e.key === "ArrowLeft") {
+              setActiveImageIndex((prev) => (prev - 1 + images.length) % images.length);
+            } else if (e.key === "ArrowRight") {
+              setActiveImageIndex((prev) => (prev + 1) % images.length);
+            }
+          }}
+          aria-label="Property image gallery"
+        >
           <div className="relative aspect-[16/9] md:aspect-[21/9] w-full rounded-lg overflow-hidden bg-neutral-900 border border-brand-border shadow-sm">
-            <Image
+            {/* Primary image — use native img to support any hostname */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={images[activeImageIndex].image_url}
-              alt={property.title}
-              fill
-              priority
+              alt={`${property.title} — photo ${activeImageIndex + 1}`}
               className={cn(
-                "object-cover transition-opacity duration-300",
+                "absolute inset-0 w-full h-full object-cover transition-opacity duration-300",
                 isClosed && "saturate-60"
               )}
+              loading="eager"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src =
+                  "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1600&q=80";
+              }}
             />
 
             {/* Sold / Rented Ribbons (§8.1) */}
@@ -229,12 +245,17 @@ export default function PropertyDetailPage() {
                       ? "border-brand-accent scale-105"
                       : "border-transparent opacity-70 hover:opacity-100"
                   )}
+                  aria-label={`View photo ${idx + 1}`}
                 >
-                  <Image
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
                     src={img.image_url}
                     alt={`Thumbnail ${idx + 1}`}
-                    fill
-                    className="object-cover"
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = "none";
+                    }}
                   />
                 </button>
               ))}

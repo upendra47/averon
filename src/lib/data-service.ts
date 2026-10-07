@@ -9,6 +9,7 @@ import {
 } from "@/types";
 import { SEED_PROPERTIES, SEED_STATES, SEED_CITIES } from "./seed-data";
 import { createClient } from "./supabase/client";
+import { parsePriceToNumber } from "./parse-price";
 
 // In-memory runtime state for demonstration and testing when Supabase is offline
 let localProperties: Property[] = [...SEED_PROPERTIES];
@@ -140,10 +141,10 @@ export const DataService = {
         query = query.eq("city_id", filters.city_id);
       }
       if (filters?.min_price) {
-        query = query.gte("price", filters.min_price);
+        query = query.gte("price_value", filters.min_price);
       }
       if (filters?.max_price) {
-        query = query.lte("price", filters.max_price);
+        query = query.lte("price_value", filters.max_price);
       }
       if (filters?.min_area) {
         query = query.gte("area_sqft", filters.min_area);
@@ -153,9 +154,9 @@ export const DataService = {
       }
 
       if (filters?.sort === "price_asc") {
-        query = query.order("price", { ascending: true });
+        query = query.order("price_value", { ascending: true, nullsFirst: false });
       } else if (filters?.sort === "price_desc") {
-        query = query.order("price", { ascending: false });
+        query = query.order("price_value", { ascending: false, nullsFirst: false });
       } else if (filters?.sort === "featured") {
         query = query.order("featured", { ascending: false }).order("created_at", { ascending: false });
       } else {
@@ -210,11 +211,17 @@ export const DataService = {
     }
 
     if (filters?.min_price) {
-      results = results.filter((p) => p.price >= Number(filters.min_price));
+      results = results.filter((p) => {
+        const val = p.price_value ?? parsePriceToNumber(p.price);
+        return val !== null && val >= Number(filters.min_price);
+      });
     }
 
     if (filters?.max_price) {
-      results = results.filter((p) => p.price <= Number(filters.max_price));
+      results = results.filter((p) => {
+        const val = p.price_value ?? parsePriceToNumber(p.price);
+        return val !== null && val <= Number(filters.max_price);
+      });
     }
 
     if (filters?.bedrooms && filters.bedrooms !== "any") {
@@ -236,9 +243,21 @@ export const DataService = {
 
     // Sorting
     if (filters?.sort === "price_asc") {
-      results.sort((a, b) => a.price - b.price);
+      results.sort((a, b) => {
+        const va = a.price_value ?? parsePriceToNumber(a.price);
+        const vb = b.price_value ?? parsePriceToNumber(b.price);
+        if (va === null) return 1;
+        if (vb === null) return -1;
+        return va - vb;
+      });
     } else if (filters?.sort === "price_desc") {
-      results.sort((a, b) => b.price - a.price);
+      results.sort((a, b) => {
+        const va = a.price_value ?? parsePriceToNumber(a.price);
+        const vb = b.price_value ?? parsePriceToNumber(b.price);
+        if (va === null) return 1;
+        if (vb === null) return -1;
+        return vb - va;
+      });
     } else if (filters?.sort === "featured") {
       results.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
     } else {
@@ -428,7 +447,8 @@ export const DataService = {
           description: property.description || "",
           property_type: property.property_type || "apartment",
           listing_type: property.listing_type || "sale",
-          price: property.price || 0,
+          price: property.price || "0",
+          price_value: property.price_value ?? parsePriceToNumber(String(property.price || "0")),
           price_unit: "INR",
           bedrooms: property.bedrooms ?? 2,
           bathrooms: property.bathrooms ?? 2,
@@ -489,7 +509,8 @@ export const DataService = {
       description: property.description || "",
       property_type: property.property_type || "apartment",
       listing_type: property.listing_type || "sale",
-      price: property.price || 0,
+      price: property.price || "0",
+      price_value: property.price_value ?? parsePriceToNumber(String(property.price || "0")),
       price_unit: "INR",
       bedrooms: property.bedrooms ?? 2,
       bathrooms: property.bathrooms ?? 2,

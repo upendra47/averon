@@ -1,14 +1,35 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Property, State, City, PropertyType, ListingType, PropertyStatus } from "@/types";
 import { DataService } from "@/lib/data-service";
-import { ArrowLeft, Save, Sparkles, Plus, Trash2, CheckCircle2 } from "lucide-react";
+import { compressImage } from "@/lib/image-compression";
+import { parsePriceToNumber } from "@/lib/parse-price";
+import { PropertyImageManager, ManagedImage } from "./PropertyImageManager";
+import { ArrowLeft, Save, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 interface PropertyFormProps {
   initialData?: Property;
   isEdit?: boolean;
+}
+
+/** Allowed characters in the price text field */
+const PRICE_ALLOWED = /^[0-9a-zA-Z .,+\-/₹]*$/;
+const MAX_CONCURRENT_UPLOADS = 3;
+
+/** Convert existing PropertyImage rows into ManagedImage for the manager */
+function existingToManaged(property: Property): ManagedImage[] {
+  if (!property.images || property.images.length === 0) return [];
+  return property.images.map((img, idx) => ({
+    id: `existing-${img.id}`,
+    previewUrl: img.image_url,
+    source: "url" as const, // treat all existing as URL-type (don't re-upload)
+    isPrimary: img.is_primary || idx === 0,
+    finalUrl: img.image_url,
+    storagePath: null,
+  }));
 }
 
 export function PropertyForm({ initialData, isEdit }: PropertyFormProps) {
@@ -30,6 +51,7 @@ export function PropertyForm({ initialData, isEdit }: PropertyFormProps) {
   const [price, setPrice] = useState<string>(
     initialData?.price ? String(initialData.price) : ""
   );
+  const [priceError, setPriceError] = useState("");
   const [bedrooms, setBedrooms] = useState<string>(
     initialData?.bedrooms !== undefined ? String(initialData.bedrooms) : "3"
   );
@@ -46,17 +68,24 @@ export function PropertyForm({ initialData, isEdit }: PropertyFormProps) {
     initialData?.status || "available"
   );
   const [featured, setFeatured] = useState<boolean>(initialData?.featured || false);
-  const [imageUrl, setImageUrl] = useState<string>(
-    initialData?.images?.[0]?.image_url ||
-      "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1600&q=80"
-  );
   const [amenitiesText, setAmenitiesText] = useState<string>(
     initialData?.amenities?.join(", ") ||
       "24/7 Security, Covered Parking, Power Backup, Clubhouse"
   );
 
+  // Images
+  const [images, setImages] = useState<ManagedImage[]>(() =>
+    initialData ? existingToManaged(initialData) : []
+  );
+  const [imageError, setImageError] = useState("");
+
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
   const [successMsg, setSuccessMsg] = useState("");
+  const [submitError, setSubmitError] = useState("");
+
+  // Track if a publish is in-flight (prevent double-submit)
+  const publishingRef = useRef(false);
 
   useEffect(() => {
     DataService.getStates().then(setStates);
@@ -76,22 +105,156 @@ export function PropertyForm({ initialData, isEdit }: PropertyFormProps) {
     }
   }, [stateId, cities]);
 
+  // ── Price input validation ────────────────────────────────────────
+  const handlePriceChange = (raw: string) => {
+    // Block disallowed chars silently
+    if (raw && !PRICE_ALLOWED.test(raw)) return;
+    setPrice(raw);
+    setPriceError("");
+  };
+
+  // ── Image upload logic ────────────────────────────────────────────
+  /**
+   * Runs parallel uploads (up to MAX_CONCURRENT_UPLOADS at a time).
+   * Returns updated image list with finalUrl / storagePath set.
+   * Throws if any upload fails (after setting error on the specific image).
+   */
+  async function uploadDeviceImages(
+    userId: string,
+    imgs: ManagedImage[]
+  ): Promise<ManagedImage[]> {
+    const supabase = createClient();
+    if (!supabase) throw new Error("Supabase not available");
+
+    const toUpload = imgs.filter((i) => i.source === "upload" && !i.finalUrl);
+    const urlImages = imgs.filter((i) => i.source !== "upload" || i.finalUrl);
+
+    const results: ManagedImage[] = [...urlImages];
+    const errors: string[] = [];
+
+    // Process in batches
+    for (let i = 0; i < toUpload.length; i += MAX_CONCURRENT_UPLOADS) {
+      const batch = toUpload.slice(i, i + MAX_CONCURRENT_UPLOADS);
+      const batchResults = await Promise.all(
+        batch.map(async (img) => {
+          try {
+            // Compress
+            const blob = img.compressedBlob || (img.file ? await compressImage(img.file) : null);
+            if (!blob) throw new Error("No file data");
+
+            const ext = blob.type === "image/webp" ? "webp" : "jpg";
+            const path = `property-images/${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+            // Upload
+            const { error: upErr } = await supabase.storage
+              .from("property-images")
+              .upload(path, blob, { contentType: blob.type, upsert: false });
+
+            if (upErr) throw new Error(upErr.message);
+
+            const { data: urlData } = supabase.storage
+              .from("property-images")
+              .getPublicUrl(path);
+
+            return {
+              ...img,
+              finalUrl: urlData.publicUrl,
+              storagePath: path,
+              uploadProgress: 100,
+              error: undefined,
+            } as ManagedImage;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "Upload failed";
+            errors.push(`"${img.file?.name || "image"}" — ${msg}`);
+
+            // Clean up already-uploaded in this batch if some failed
+            return { ...img, error: msg } as ManagedImage;
+          }
+        })
+      );
+      results.push(...batchResults);
+    }
+
+    if (errors.length > 0) {
+      // Update images state to show per-image errors
+      const updated = imgs.map((orig) => {
+        const found = results.find((r) => r.id === orig.id);
+        return found || orig;
+      });
+      setImages(updated);
+      throw new Error(`Upload failed for: ${errors.join("; ")}`);
+    }
+
+    return imgs.map((orig) => results.find((r) => r.id === orig.id) || orig);
+  }
+
+  // ── Submit ────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (publishingRef.current) return;
+
+    setSubmitError("");
+    setImageError("");
+    setPriceError("");
+
+    // Validate price
+    if (!price.trim()) {
+      setPriceError("Price is required.");
+      return;
+    }
+
+    // Validate images
+    if (images.length === 0) {
+      setImageError("At least 1 image is required to publish.");
+      return;
+    }
+
+    publishingRef.current = true;
     setIsSubmitting(true);
 
     try {
+      const supabase = createClient();
+      let uploadedImages = images;
+
+      // Upload device images if Supabase is available
+      if (supabase) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const uploadCount = images.filter(
+            (i) => i.source === "upload" && !i.finalUrl
+          ).length;
+          if (uploadCount > 0) {
+            setUploadingCount(uploadCount);
+            uploadedImages = await uploadDeviceImages(user.id, images);
+            setImages(uploadedImages);
+            setUploadingCount(0);
+          }
+        }
+      }
+
       const amenitiesList = amenitiesText
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
+
+      // Build property_images rows from managed images
+      const imageRows = uploadedImages.map((img, idx) => ({
+        id: `img-${idx}`,
+        property_id: initialData?.id || "temp",
+        image_url: img.finalUrl || img.previewUrl,
+        is_primary: img.isPrimary,
+        sort_order: idx + 1,
+      }));
+
+      const priceValue = parsePriceToNumber(price.trim());
 
       const propData: Partial<Property> = {
         title,
         description,
         property_type: propertyType,
         listing_type: listingType,
-        price: Number(price),
+        price: price.trim(),
+        price_value: priceValue ?? undefined,
         bedrooms: bedrooms ? Number(bedrooms) : null,
         bathrooms: bathrooms ? Number(bathrooms) : null,
         area_sqft: areaSqft ? Number(areaSqft) : null,
@@ -100,19 +263,39 @@ export function PropertyForm({ initialData, isEdit }: PropertyFormProps) {
         city_id: Number(cityId),
         status,
         featured,
-        images: [
-          {
-            id: `img-${Date.now()}`,
-            property_id: initialData?.id || "temp",
-            image_url: imageUrl,
-            is_primary: true,
-            sort_order: 1,
-          },
-        ],
+        images: imageRows,
         amenities: amenitiesList,
       };
 
+      // Backward compat: keep primary_photo_url column in sync
+      // The DataService.createProperty/updateProperty handles images via property_images table.
+      // We pass images as the property_images rows.
+
       if (isEdit && initialData?.id) {
+        // Delete removed uploaded images from Storage
+        if (supabase) {
+          const removedStorage = (initialData.images || [])
+            .filter(
+              (old) =>
+                !uploadedImages.some(
+                  (u) => u.finalUrl === old.image_url || u.previewUrl === old.image_url
+                )
+            )
+            .filter((old) => old.image_url.includes("supabase.co"));
+
+          if (removedStorage.length > 0) {
+            // Best-effort delete — don't block save if this fails
+            const paths = removedStorage.map((img) => {
+              const match = img.image_url.match(/property-images\/.+$/);
+              return match ? match[0] : null;
+            }).filter(Boolean) as string[];
+
+            if (paths.length > 0) {
+              await supabase.storage.from("property-images").remove(paths);
+            }
+          }
+        }
+
         await DataService.updateProperty(initialData.id, propData);
         setSuccessMsg("Listing updated successfully!");
       } else {
@@ -124,11 +307,16 @@ export function PropertyForm({ initialData, isEdit }: PropertyFormProps) {
         router.push("/admin");
       }, 1500);
     } catch (err) {
-      console.error(err);
+      const msg = err instanceof Error ? err.message : "An error occurred";
+      setSubmitError(msg);
+      setUploadingCount(0);
     } finally {
       setIsSubmitting(false);
+      publishingRef.current = false;
     }
   };
+
+  const isPublishing = isSubmitting || uploadingCount > 0;
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-8 space-y-6">
@@ -158,6 +346,13 @@ export function PropertyForm({ initialData, isEdit }: PropertyFormProps) {
         </div>
       )}
 
+      {submitError && (
+        <div className="p-4 bg-red-50 border border-red-200 text-red-800 text-xs rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 text-red-600" />
+          <span>{submitError}</span>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="bg-white border border-brand-border rounded-lg p-6 sm:p-8 space-y-6 shadow-xs">
         {/* Title */}
         <div>
@@ -174,7 +369,7 @@ export function PropertyForm({ initialData, isEdit }: PropertyFormProps) {
           />
         </div>
 
-        {/* Listing Type, Property Type, Valuation */}
+        {/* Listing Type, Property Type, Price */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-brand-fg mb-1">
@@ -213,13 +408,30 @@ export function PropertyForm({ initialData, isEdit }: PropertyFormProps) {
               Price (INR ₹) *
             </label>
             <input
-              type="number"
+              type="text"
               required
-              placeholder="e.g. 68000000"
+              maxLength={50}
+              placeholder="e.g. 6.8 Cr, 85 Lakhs, Price on Request"
               value={price}
-              onChange={(e) => setPrice(e.target.value)}
+              onChange={(e) => handlePriceChange(e.target.value)}
+              onBlur={() => {
+                if (price.trim() && !PRICE_ALLOWED.test(price)) {
+                  setPriceError("Contains invalid characters.");
+                }
+              }}
               className="w-full px-3 py-2 text-xs bg-neutral-50 border border-brand-border rounded focus:bg-white focus:border-brand-accent focus:outline-none"
+              aria-describedby={priceError ? "price-error" : undefined}
             />
+            {priceError && (
+              <p id="price-error" className="text-red-600 text-[10px] mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />{priceError}
+              </p>
+            )}
+            {price.trim() && parsePriceToNumber(price.trim()) !== null && (
+              <p className="text-brand-muted text-[10px] mt-1">
+                Parsed value: ₹{parsePriceToNumber(price.trim())!.toLocaleString("en-IN")}
+              </p>
+            )}
           </div>
         </div>
 
@@ -332,19 +544,21 @@ export function PropertyForm({ initialData, isEdit }: PropertyFormProps) {
           />
         </div>
 
-        {/* Primary Image URL */}
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-brand-fg mb-1">
-            Primary Photo URL (Unsplash or Supabase Storage)
-          </label>
-          <input
-            type="url"
-            required
-            placeholder="https://images.unsplash.com/..."
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            className="w-full px-3 py-2 text-xs bg-neutral-50 border border-brand-border rounded focus:bg-white focus:border-brand-accent focus:outline-none font-mono"
+        {/* Property Image Manager */}
+        <div className="border-t border-brand-border pt-6">
+          <PropertyImageManager
+            images={images}
+            onChange={(updated) => {
+              setImages(updated);
+              if (updated.length > 0) setImageError("");
+            }}
+            error={imageError}
           />
+          {uploadingCount > 0 && (
+            <p className="text-xs text-brand-muted mt-2 animate-pulse">
+              Uploading {uploadingCount} image{uploadingCount > 1 ? "s" : ""}…
+            </p>
+          )}
         </div>
 
         {/* Amenities */}
@@ -396,11 +610,19 @@ export function PropertyForm({ initialData, isEdit }: PropertyFormProps) {
 
           <button
             type="submit"
-            disabled={isSubmitting}
-            className="bg-brand-cta text-brand-ctaFg hover:bg-black transition-colors px-6 py-2.5 rounded text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-sm"
+            disabled={isPublishing}
+            className="bg-brand-cta text-brand-ctaFg hover:bg-black transition-colors px-6 py-2.5 rounded text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Save className="w-4 h-4" />
-            <span>{isSubmitting ? "Saving..." : isEdit ? "Update Property" : "Publish Property"}</span>
+            <span>
+              {uploadingCount > 0
+                ? `Uploading ${uploadingCount} image${uploadingCount > 1 ? "s" : ""}…`
+                : isSubmitting
+                  ? "Saving…"
+                  : isEdit
+                    ? "Update Property"
+                    : "Publish Property"}
+            </span>
           </button>
         </div>
       </form>

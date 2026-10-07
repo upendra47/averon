@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { Property } from "@/types";
 import { formatIndianPrice, formatArea, cn } from "@/lib/utils";
 import { DataService } from "@/lib/data-service";
@@ -72,15 +71,19 @@ export function PropertyCard({
         href={`/properties/${property.id}`}
         className="relative block w-full aspect-[16/10] overflow-hidden bg-neutral-100"
       >
-        <Image
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src={primaryImage}
           alt={property.title}
-          fill
-          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           className={cn(
-            "object-cover transition-transform duration-500 group-hover:scale-105",
+            "absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105",
             isClosed && "saturate-50 contrast-95"
           )}
+          loading="lazy"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src =
+              "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1200&q=80";
+          }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
 
