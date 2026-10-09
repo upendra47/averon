@@ -415,24 +415,17 @@ export function PropertyImageManager({
               key={img.id}
               className="relative group rounded-lg overflow-hidden border border-brand-border bg-neutral-100 aspect-square"
             >
-              {/* Thumbnail */}
-              {img.source === "url" ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={img.previewUrl}
-                  alt={`Image ${idx + 1}`}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <Image
-                  src={img.previewUrl}
-                  alt={`Image ${idx + 1}`}
-                  fill
-                  className="object-cover"
-                  unoptimized
-                />
-              )}
+              {/* Thumbnail — use native img for both blob and URL previews */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={img.previewUrl}
+                alt={`Image ${idx + 1}`}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.opacity = "0.3";
+                }}
+              />
 
               {/* Primary badge */}
               {img.isPrimary && (
